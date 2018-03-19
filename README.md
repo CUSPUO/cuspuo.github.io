@@ -1,1 +1,2 @@
-# cuspuo.github.io
+# website
+The CUSP Urban Observatory website
