@@ -25,7 +25,7 @@ When changes are pushed to `master`:
 2. **Cache clear** — CloudFront CDN cache is invalidated
 3. **Live** — Changes are available on all domains (cuspuo.org, cuspuo.com, and their www variants)
 
-HTML files are cached for 5 minutes; other assets (images, CSS, JS) are cached for 24 hours.
+HTML files are cached for 2 minutes; other assets (images, CSS, JS) are cached for 30 minutes.
 
 ## File Structure
 
