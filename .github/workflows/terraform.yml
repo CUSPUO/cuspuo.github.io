@@ -52,6 +52,7 @@ jobs:
         id: plan
         working-directory: infra
         run: |
+          set -o pipefail
           terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt
           echo "plan_exitcode=$?" >> "$GITHUB_OUTPUT"
 
@@ -61,12 +62,16 @@ jobs:
           script: |
             const fs = require('fs');
             const plan = fs.readFileSync('infra/plan_output.txt', 'utf8');
-            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n\n... (truncated)' : plan;
-            const body = `### Terraform Plan
-            \`\`\`
-            ${truncated}
-            \`\`\`
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            const truncated = plan.length > 60000
+              ? plan.substring(0, 60000) + '\n\n... (truncated)'
+              : plan;
+            const body = [
+              '### Terraform Plan',
+              '```',
+              truncated,
+              '```',
+              `*Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`
+            ].join('\n');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
