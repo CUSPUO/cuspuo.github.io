@@ -60,5 +60,5 @@ variable "route53_domains" {
 variable "external_domains" {
   description = "List of domains NOT in Route53 (e.g., GoDaddy). ACM validation will be output for manual creation."
   type        = list(string)
-  default     = ["muonetwork.com", "muonetwork.org"]
+  default     = [] # Add ["muonetwork.com", "muonetwork.org"] when ready to configure GoDaddy domains
 }
