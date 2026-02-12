@@ -1,0 +1,12 @@
+aws_profile      = "muon"
+site_bucket_name = "cuspuo-site"
+github_org       = "cuspuo"
+github_repo      = "cuspuo.github.io"
+github_branch    = "master"
+
+route53_domains = {
+  "cuspuo.org" = { zone_id = "Z0367339LAAK1PCREG43" }
+  "cuspuo.com" = { zone_id = "Z0778151188PUBAI3NXUI" }
+}
+
+external_domains = ["muonetwork.com", "muonetwork.org"]
