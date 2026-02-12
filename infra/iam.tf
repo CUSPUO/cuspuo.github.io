@@ -1,4 +1,10 @@
 # -----------------------------------------------------------------------------
+# Data Sources
+# -----------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# -----------------------------------------------------------------------------
 # GitHub Actions OIDC Provider
 # -----------------------------------------------------------------------------
 resource "aws_iam_openid_connect_provider" "github" {
@@ -10,8 +16,32 @@ resource "aws_iam_openid_connect_provider" "github" {
 # -----------------------------------------------------------------------------
 # Deploy Role — content deployment (S3 sync + CloudFront invalidation)
 # -----------------------------------------------------------------------------
+resource "aws_iam_policy" "deploy_boundary" {
+  name        = "cuspuo-deploy-boundary"
+  description = "Permissions boundary for the cuspuo-github-deploy role"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowDeployActions"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "cloudfront:CreateInvalidation"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "github_deploy" {
-  name = "cuspuo-github-deploy"
+  name                 = "cuspuo-github-deploy"
+  permissions_boundary = aws_iam_policy.deploy_boundary.arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -85,7 +115,12 @@ resource "aws_iam_role" "github_terraform" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/${var.github_branch}",
+              "repo:${var.github_org}/${var.github_repo}:pull_request"
+            ]
           }
         }
       }
@@ -224,9 +259,17 @@ resource "aws_iam_role_policy" "terraform_permissions" {
           "iam:ListInstanceProfilesForRole",
           "iam:TagRole",
           "iam:UntagRole",
-          "iam:ListRoleTags"
+          "iam:ListRoleTags",
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion"
         ]
-        Resource = "arn:aws:iam::217832331713:role/cuspuo-github-deploy"
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-deploy",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-deploy-boundary"
+        ]
       },
       {
         Sid    = "IAMOIDCProviderManagement"
@@ -243,7 +286,7 @@ resource "aws_iam_role_policy" "terraform_permissions" {
           "iam:UntagOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviderTags"
         ]
-        Resource = "arn:aws:iam::217832331713:oidc-provider/token.actions.githubusercontent.com"
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
       },
       {
         Sid    = "IAMReadSelf"
@@ -260,8 +303,9 @@ resource "aws_iam_role_policy" "terraform_permissions" {
           "iam:ListPolicyVersions"
         ]
         Resource = [
-          "arn:aws:iam::217832331713:role/cuspuo-github-terraform",
-          "arn:aws:iam::217832331713:policy/cuspuo-terraform-boundary"
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-terraform",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-terraform-boundary",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-deploy-boundary"
         ]
       },
       {
@@ -281,7 +325,7 @@ resource "aws_iam_role_policy" "terraform_permissions" {
           "dynamodb:TagResource",
           "dynamodb:UntagResource"
         ]
-        Resource = "arn:aws:dynamodb:us-east-1:217832331713:table/${var.state_lock_table_name}"
+        Resource = "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.state_lock_table_name}"
       },
       {
         Sid      = "STSIdentity"
@@ -306,8 +350,8 @@ resource "aws_iam_role_policy" "terraform_deny_escalation" {
         Effect = "Deny"
         Action = "iam:UpdateAssumeRolePolicy"
         Resource = [
-          "arn:aws:iam::217832331713:role/cuspuo-github-terraform",
-          "arn:aws:iam::217832331713:role/cuspuo-github-deploy"
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-terraform",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-deploy"
         ]
       },
       {
@@ -321,7 +365,7 @@ resource "aws_iam_role_policy" "terraform_deny_escalation" {
           "iam:PutRolePermissionsBoundary",
           "iam:DeleteRolePermissionsBoundary"
         ]
-        Resource = "arn:aws:iam::217832331713:role/cuspuo-github-terraform"
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-terraform"
       },
       {
         Sid    = "DenyUserAndKeyCreation"
@@ -329,10 +373,25 @@ resource "aws_iam_role_policy" "terraform_deny_escalation" {
         Action = [
           "iam:CreateUser",
           "iam:CreateAccessKey",
-          "iam:AttachUserPolicy",
-          "iam:CreateRole"
+          "iam:AttachUserPolicy"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "DenyStateInfraDestruction"
+        Effect = "Deny"
+        Action = [
+          "s3:DeleteBucket"
+        ]
+        Resource = "arn:aws:s3:::${var.state_bucket_name}"
+      },
+      {
+        Sid    = "DenyStateLockDestruction"
+        Effect = "Deny"
+        Action = [
+          "dynamodb:DeleteTable"
+        ]
+        Resource = "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.state_lock_table_name}"
       }
     ]
   })
@@ -378,9 +437,17 @@ resource "aws_iam_policy" "terraform_boundary" {
           "iam:ListInstanceProfilesForRole",
           "iam:TagRole",
           "iam:UntagRole",
-          "iam:ListRoleTags"
+          "iam:ListRoleTags",
+          "iam:CreatePolicy",
+          "iam:DeletePolicy",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion"
         ]
-        Resource = "arn:aws:iam::217832331713:role/cuspuo-github-deploy"
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-deploy",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-deploy-boundary"
+        ]
       },
       {
         Sid    = "AllowIAMOIDCProvider"
@@ -397,7 +464,7 @@ resource "aws_iam_policy" "terraform_boundary" {
           "iam:UntagOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviderTags"
         ]
-        Resource = "arn:aws:iam::217832331713:oidc-provider/token.actions.githubusercontent.com"
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
       },
       {
         Sid    = "AllowIAMReadSelf"
@@ -414,8 +481,9 @@ resource "aws_iam_policy" "terraform_boundary" {
           "iam:ListPolicyVersions"
         ]
         Resource = [
-          "arn:aws:iam::217832331713:role/cuspuo-github-terraform",
-          "arn:aws:iam::217832331713:policy/cuspuo-terraform-boundary"
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/cuspuo-github-terraform",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-terraform-boundary",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/cuspuo-deploy-boundary"
         ]
       }
     ]
