@@ -104,7 +104,6 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    environment: production-infra
 
     steps:
       - name: Checkout repository
