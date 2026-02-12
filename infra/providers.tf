@@ -14,13 +14,13 @@ terraform {
     region         = "us-east-1"
     dynamodb_table = "cuspuo-terraform-lock"
     encrypt        = true
-    profile        = "muon"
+    # No profile here — uses AWS_PROFILE env var locally, OIDC env vars in CI
   }
 }
 
 provider "aws" {
   region  = "us-east-1"
-  profile = var.aws_profile
+  profile = var.aws_profile != "" ? var.aws_profile : null
 
   default_tags {
     tags = {

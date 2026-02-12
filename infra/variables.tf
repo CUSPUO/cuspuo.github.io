@@ -23,9 +23,9 @@ variable "state_lock_table_name" {
 }
 
 variable "github_org" {
-  description = "GitHub organization name (lowercase, as used in OIDC sub claim)"
+  description = "GitHub organization name (case-sensitive, must match OIDC sub claim)"
   type        = string
-  default     = "cuspuo"
+  default     = "CUSPUO"
 }
 
 variable "github_repo" {
