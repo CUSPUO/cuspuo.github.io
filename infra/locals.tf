@@ -5,7 +5,7 @@ locals {
     for domain in local.all_domains : [domain, "www.${domain}"]
   ])
 
-  primary_domain = local.all_domains[0]
+  primary_domain = var.primary_domain
 
   cloudfront_aliases = local.all_sans
 

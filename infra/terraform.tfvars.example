@@ -1,5 +1,6 @@
 aws_profile      = "muon"
 site_bucket_name = "cuspuo-site"
+primary_domain   = "cuspuo.org"
 github_org       = "cuspuo"
 github_repo      = "cuspuo.github.io"
 github_branch    = "master"

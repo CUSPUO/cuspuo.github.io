@@ -40,6 +40,12 @@ variable "github_branch" {
   default     = "master"
 }
 
+variable "primary_domain" {
+  description = "Primary domain name (used as ACM certificate CN)"
+  type        = string
+  default     = "cuspuo.org"
+}
+
 variable "route53_domains" {
   description = "Map of domains managed in Route53, with their hosted zone IDs"
   type = map(object({

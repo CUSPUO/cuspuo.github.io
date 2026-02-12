@@ -18,13 +18,15 @@ resource "aws_cloudfront_function" "rewrite_index" {
 
       if (uri.endsWith('/')) {
         request.uri += 'index.html';
-      } else if (!uri.includes('.')) {
-        request.uri += '/index.html';
       }
 
       return request;
     }
   EOF
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
 }
 
 resource "aws_cloudfront_response_headers_policy" "security" {
@@ -54,7 +56,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     }
 
     content_security_policy {
-      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'"
+      content_security_policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
       override                = true
     }
   }
@@ -89,7 +91,7 @@ resource "aws_cloudfront_distribution" "site" {
     viewer_protocol_policy     = "redirect-to-https"
     compress                   = true
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
-    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
 
     function_association {
       event_type   = "viewer-request"
@@ -99,6 +101,13 @@ resource "aws_cloudfront_distribution" "site" {
 
   custom_error_response {
     error_code            = 403
+    response_code         = 404
+    response_page_path    = "/404.html"
+    error_caching_min_ttl = 300
+  }
+
+  custom_error_response {
+    error_code            = 404
     response_code         = 404
     response_page_path    = "/404.html"
     error_caching_min_ttl = 300
